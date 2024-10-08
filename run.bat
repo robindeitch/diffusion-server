@@ -13,3 +13,4 @@ cd /D "%~dp0"
 @echo
 @cd src
 python sd.py
+cd ..

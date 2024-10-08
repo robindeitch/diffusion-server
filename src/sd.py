@@ -1,7 +1,7 @@
 import os
 from diffusers import FluxPipeline
 
-from diffusers import StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL
+from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL
 from diffusers import FlowMatchEulerDiscreteScheduler, AutoencoderKL
 from diffusers.models.transformers.transformer_flux import FluxTransformer2DModel
 from diffusers.pipelines.flux.pipeline_flux import FluxPipeline
@@ -18,7 +18,7 @@ dtype = torch.bfloat16
 
 # ---------------------
 # Seamless tiling from here : https://github.com/huggingface/diffusers/issues/556
-def flatten(model: torch.nn.Module):
+def flatten(model: torch.nn.Module) -> list[torch.nn.Module]:
     """
     Recursively flattens the model to retrieve all layers.
     """
@@ -36,7 +36,7 @@ def flatten(model: torch.nn.Module):
     return flattened
 
 
-def seamless_tiling(pipeline):
+def seamless_tiling(pipeline:DiffusionPipeline) -> None:
     """
     Enables seamless tiling for specific layers in the pipeline.
     """
@@ -60,12 +60,12 @@ def seamless_tiling(pipeline):
 
 # ---------------------
 
-#model = "../../models/black-forest-labs/Flux.1-schnell/"
-def model_path(path_under_models_folder):
+def model_path(path_under_models_folder:str) -> str:
     models_base = "../../../models/"
     return os.path.join(models_base, path_under_models_folder)
 
-def log_timing(prev_time, message):
+
+def log_timing(prev_time:float, message:str) -> float:
 
     this_time = timer()
     print("********")
@@ -74,37 +74,40 @@ def log_timing(prev_time, message):
     
     return this_time
 
-def sdxl_controlnet_example():
 
-    #prompt = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
-    prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
-        The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
-        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
-    prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
-        The scene is moody and threatening with an orange accent color sparingly used to accentuate the architectural details. \
-        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
-    prompt = "A photograph captures towering sci-fi buildings with cinematic grandeur. \
-        The scene is moody and threatening with an orange accent color sparingly used to accentuate the architectural details. \
-        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
+def sdxl_controlnet_example(prompt:str, depth_image_path:str, model_file:str, output_image_path:str) -> None:
+
+    vae_model_folder = model_path("hugging-face/madebyollin/sdxl-vae-fp16-fix")
+    controlnet_model_folder = model_path("hugging-face/diffusers/controlnet-depth-sdxl-1.0")
+    refiner_model_file = model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors")
+
     negative_prompt = "low quality, bad quality, sketches"
 
     prev_time = log_timing(0, "Loading image")
-    image = load_image("../../diffusion-server-files/input-depth.png")
+    image = load_image(depth_image_path)
     image = image.resize((1024, 512))
 
     # initialize the models and pipeline
     prev_time = log_timing(prev_time, "Loading ControlNetModel")
     controlnet_conditioning_scale = 0.85
-    controlnet = ControlNetModel.from_pretrained(model_path("hugging-face/diffusers/controlnet-depth-sdxl-1.0"), torch_dtype=dtype)
+    controlnet = ControlNetModel.from_pretrained(
+        controlnet_model_folder,
+        torch_dtype=dtype,
+        local_files_only=True
+    )
 
     prev_time = log_timing(prev_time, "Loading AutoencoderKL")
-    vae = AutoencoderKL.from_pretrained(model_path("hugging-face/madebyollin/sdxl-vae-fp16-fix"), torch_dtype=dtype)
+    vae = AutoencoderKL.from_pretrained(
+        vae_model_folder,
+        torch_dtype=dtype,
+        local_files_only=True
+    )
 
     # Create SDXL base pipeline
     prev_time = log_timing(prev_time, "Loading StableDiffusionXLControlNetPipeline")
     base_pipe = StableDiffusionXLControlNetPipeline.from_single_file(
-        model_path("civitai/sdxl_10/MOHAWK_v20.safetensors"), 
-        config=model_path("civitai/sdxl_10"),
+        model_file, 
+        config="../config/sdxl10",
         controlnet=controlnet, 
         vae=vae, 
         torch_dtype=dtype,
@@ -116,8 +119,8 @@ def sdxl_controlnet_example():
     # Create SDXL refiner pipeline
     prev_time = log_timing(prev_time, "Loading StableDiffusionXLImg2ImgPipeline")
     refiner_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(
-        model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors"),
-        config=model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0"),
+        refiner_model_file,
+        config="../config/sdxl10-refiner",
         vae=base_pipe.vae,
         text_encoder_2=base_pipe.text_encoder_2,
         torch_dtype=dtype
@@ -157,35 +160,9 @@ def sdxl_controlnet_example():
     ).images[0]
 
     prev_time = log_timing(prev_time, "Saving image")
-    image.save("../../diffusion-server-files/sdxl_controlnet_example.png")
+    image.save(output_image_path)
     prev_time = log_timing(prev_time, "Finished")
 
-def sd_controlnet():
-
-    from diffusers import StableDiffusionXLControlNetImg2ImgPipeline, ControlNetModel
-
-    prev_time = log_timing(0, "Creating ControlNetModel")
-    controlnet = ControlNetModel.from_single_file(model_path("hugging-face/Illyasviel/ControlNet-v1-1/control_v11f1p_sd15_depth.pth"), local_files_only=True)
-
-    prev_time = log_timing(prev_time, "Creating StableDiffusionControlNetPipeline")
-    ckpt_path = model_path("hugging-face/stable-diffusion-v1.5/stable-diffusion-v1.5/v1-5-pruned-emaonly.safetensors")
-    config_path = model_path("")
-    pipe = StableDiffusionXLControlNetPipeline.from_single_file(ckpt_path, controlnet=controlnet, local_files_only=True)
-
-    prev_time = log_timing(prev_time, "Creating image")
-    prompt = "A cat took a fish and running in a market"
-    image = pipe(
-        prompt,
-        guidance_scale=3.5,
-        width=512,
-        height=512,
-        num_inference_steps=4,
-    ).images[0]
-
-    prev_time = log_timing(prev_time, "Saving image")
-    image.save("cat.png")
-
-    prev_time = log_timing(prev_time, "Done")
 
 def flux_schnell():
 
@@ -241,4 +218,19 @@ def flux_schnell():
     prev_time = log_timing(prev_time, "Done")
 
 if __name__ == "__main__":
-    sdxl_controlnet_example()
+    #prompt = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
+    prompt1 = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
+        The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
+        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
+    prompt2 = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
+        The scene is moody and threatening with an orange accent color sparingly used to accentuate the architectural details. \
+        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
+    prompt3 = "A photograph captures towering sci-fi buildings with cinematic grandeur. \
+        The scene is moody and threatening with an orange accent color sparingly used to accentuate the architectural details. \
+        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
+
+    depth_image = "../../diffusion-server-files/input-depth.png"
+    output_image = "../../diffusion-server-files/sdxl_controlnet_example.png"
+    sdxl_model = model_path("civitai/sdxl_10/MOHAWK_v20.safetensors")
+
+    sdxl_controlnet_example(prompt=prompt3, depth_image_path=depth_image, model_file=sdxl_model, output_image_path=output_image)
