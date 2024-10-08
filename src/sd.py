@@ -75,21 +75,14 @@ def log_timing(prev_time:float, message:str) -> float:
     return this_time
 
 
-def sdxl_controlnet_example(prompt:str, depth_image_path:str, model_file:str, output_image_path:str) -> None:
+def load_sdxl_with_controlnet(model_file:str) -> tuple[DiffusionPipeline, DiffusionPipeline]:
 
     vae_model_folder = model_path("hugging-face/madebyollin/sdxl-vae-fp16-fix")
     controlnet_model_folder = model_path("hugging-face/diffusers/controlnet-depth-sdxl-1.0")
     refiner_model_file = model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors")
 
-    negative_prompt = "low quality, bad quality, sketches"
-
-    prev_time = log_timing(0, "Loading image")
-    image = load_image(depth_image_path)
-    image = image.resize((1024, 512))
-
     # initialize the models and pipeline
-    prev_time = log_timing(prev_time, "Loading ControlNetModel")
-    controlnet_conditioning_scale = 0.85
+    prev_time = log_timing(0, "Loading ControlNetModel")
     controlnet = ControlNetModel.from_pretrained(
         controlnet_model_folder,
         torch_dtype=dtype,
@@ -137,6 +130,19 @@ def sdxl_controlnet_example(prompt:str, depth_image_path:str, model_file:str, ou
     #seamless_tiling(pipeline=base_pipe)
     #seamless_tiling(pipeline=refiner_pipe)
 
+    prev_time = log_timing(prev_time, "Finished")
+
+    return base_pipe, refiner_pipe
+
+def generate_using_sdxl_with_controlnet(prompt:str, base_pipe:DiffusionPipeline, refiner_pipe:DiffusionPipeline, depth_image_file:str, output_image_file:str) -> None:
+
+    negative_prompt = "low quality, bad quality, sketches"
+    controlnet_conditioning_scale = 0.85
+
+    prev_time = log_timing(0, "Loading image")
+    image = load_image(depth_image_file)
+    image = image.resize((1024, 512))
+
     # generate image
     prev_time = log_timing(prev_time, "Generating base image")
     inference_steps = 50
@@ -160,65 +166,12 @@ def sdxl_controlnet_example(prompt:str, depth_image_path:str, model_file:str, ou
     ).images[0]
 
     prev_time = log_timing(prev_time, "Saving image")
-    image.save(output_image_path)
+    image.save(output_image_file)
     prev_time = log_timing(prev_time, "Finished")
 
 
-def flux_schnell():
-
-    prev_time = log_timing(0, "Creating FlowMatchEulerDiscreteScheduler")
-    scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(os.path.join(models_base, "hugging-face/black-forest-labs/Flux.1-schnell/scheduler"))
-
-    prev_time = log_timing(prev_time, "Creating CLIPTextModel")
-    text_encoder = CLIPTextModel.from_pretrained("openai/clip-vit-large-patch14", torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating CLIPTokenizer")
-    tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-large-patch14", torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating T5EncoderModel")
-    text_encoder_2 = T5EncoderModel.from_pretrained(os.path.join(models_base, "hugging-face/black-forest-labs/Flux.1-schnell/text_encoder_2"), torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating T5TokenizerFast")
-    tokenizer_2 = T5TokenizerFast.from_pretrained(os.path.join(models_base, "hugging-face/black-forest-labs/Flux.1-schnell/tokenizer_2"), torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating AutoencoderKL")
-    vae = AutoencoderKL.from_pretrained(os.path.join(models_base, "hugging-face/black-forest-labs/Flux.1-schnell/vae"), torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating FluxTransformer2DModel")
-    transformer = FluxTransformer2DModel.from_single_file(os.path.join(models_base, "hugging-face/kijai/flux1-schnell-fp8-e4m3fn.safetensors"), torch_dtype=dtype)
-
-    prev_time = log_timing(prev_time, "Creating FluxPipeline")
-    pipe = FluxPipeline(
-        scheduler=scheduler,
-        text_encoder=text_encoder,
-        tokenizer=tokenizer,
-        text_encoder_2=None,
-        tokenizer_2=tokenizer_2,
-        vae=vae,
-        transformer=None,
-    )
-    pipe.text_encoder_2 = text_encoder_2
-    pipe.transformer = transformer
-    #pipe.enable_model_cpu_offload()
-    pipe.to("cuda")
-
-    prev_time = log_timing(prev_time, "Creating image")
-    prompt = "A cat took a fish and running in a market"
-    image = pipe(
-        prompt,
-        guidance_scale=3.5,
-        width=512,
-        height=512,
-        num_inference_steps=4,
-    ).images[0]
-
-    prev_time = log_timing(prev_time, "Saving image")
-    image.save("cat.png")
-
-    prev_time = log_timing(prev_time, "Done")
-
 if __name__ == "__main__":
-    #prompt = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
+    prompt0 = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
     prompt1 = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
         The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
         Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
@@ -230,7 +183,15 @@ if __name__ == "__main__":
         Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
 
     depth_image = "../../diffusion-server-files/input-depth.png"
-    output_image = "../../diffusion-server-files/sdxl_controlnet_example.png"
-    sdxl_model = model_path("civitai/sdxl_10/MOHAWK_v20.safetensors")
+    
+    sdxl_model_mohawk = model_path("civitai/sdxl_10/MOHAWK_v20.safetensors")
+    sdxl_model_cardos = model_path("civitai/sdxl_10/cardosXL_v10.safetensors")
 
-    sdxl_controlnet_example(prompt=prompt3, depth_image_path=depth_image, model_file=sdxl_model, output_image_path=output_image)
+    output_image1 = "../../diffusion-server-files/sdxl_controlnet_example1.png"
+    output_image2 = "../../diffusion-server-files/sdxl_controlnet_example2.png"
+    output_image3 = "../../diffusion-server-files/sdxl_controlnet_example3.png"
+
+    base_pipe, refiner_pipe = load_sdxl_with_controlnet(model_file=sdxl_model_mohawk)
+    generate_using_sdxl_with_controlnet(prompt=prompt0, base_pipe=base_pipe, refiner_pipe=refiner_pipe, depth_image_file=depth_image, output_image_file=output_image1)
+    generate_using_sdxl_with_controlnet(prompt=prompt2, base_pipe=base_pipe, refiner_pipe=refiner_pipe, depth_image_file=depth_image, output_image_file=output_image2)
+    generate_using_sdxl_with_controlnet(prompt=prompt3, base_pipe=base_pipe, refiner_pipe=refiner_pipe, depth_image_file=depth_image, output_image_file=output_image3)
