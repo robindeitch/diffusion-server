@@ -106,10 +106,10 @@ def sdxl_controlnet_example(prompt:str, depth_image_path:str, model_file:str, ou
     # Create SDXL base pipeline
     prev_time = log_timing(prev_time, "Loading StableDiffusionXLControlNetPipeline")
     base_pipe = StableDiffusionXLControlNetPipeline.from_single_file(
-        model_file, 
+        model_file,
         config="../config/sdxl10",
-        controlnet=controlnet, 
-        vae=vae, 
+        controlnet=controlnet,
+        vae=vae,
         torch_dtype=dtype,
         local_dir_use_symlinks=False,
         local_files_only=True
