@@ -1,4 +1,4 @@
-from utils import model_path, LoraInfo, log_timing
+from utils import LoraInfo, log_timing
 from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler, DPMSolverMultistepScheduler
 from PIL import Image
 import torch
@@ -57,9 +57,9 @@ class SDXL:
 
     def __init__(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
 
-        vae_model_folder = model_path("hugging-face/stabilityai/sdxl-vae")
-        controlnet_model_folder = model_path("hugging-face/diffusers/controlnet-depth-sdxl-1.0")
-        refiner_model_file = model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors")
+        controlnet_model_folder = "../.models/diffusers/controlnet-depth-sdxl-1.0"
+        vae_model_folder = "../.models/stabilityai/sdxl-vae"
+        refiner_model_file = "../.models/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors"
 
         # initialize the models and pipeline
         prev_time = log_timing(0, "Loading ControlNetModel")
@@ -73,7 +73,6 @@ class SDXL:
         prev_time = log_timing(prev_time, f"Loading AutoencoderKL from {vae_model_folder}")
         vae = AutoencoderKL.from_pretrained(
             vae_model_folder,
-            variant="fp16",
             torch_dtype=dtype,
             local_files_only=True
         )
@@ -138,9 +137,7 @@ class SDXL:
         self.refiner_pipe = refiner_pipe
 
 
-    def generate_panorama(self, prompt:str, negative_prompt:str, seed:int, steps:int, guidance:float, depth_image:Image, lora_scale:float = 0) -> Image:
-
-        controlnet_conditioning_scale = 0.85
+    def generate_panorama(self, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image:Image, depth_image_influence:float, lora_overall_influence:float = 0) -> Image:
 
         prompt = ", ".join([self.lora_prompt, prompt])
 
@@ -156,11 +153,11 @@ class SDXL:
             image = self.base_pipe(
                 prompt,
                 negative_prompt=negative_prompt,
-                controlnet_conditioning_scale=controlnet_conditioning_scale,
+                controlnet_conditioning_scale=depth_image_influence,
                 image=[depth_image],
                 num_inference_steps=steps,
                 denoising_end=refiner_start_percentage,
-                guidance_scale=guidance,
+                guidance_scale=prompt_guidance,
                 generator=generator,
                 output_type="latent"
             ).images
@@ -178,11 +175,11 @@ class SDXL:
             image = self.base_pipe(
                 prompt,
                 negative_prompt=negative_prompt,
-                controlnet_conditioning_scale=controlnet_conditioning_scale,
+                controlnet_conditioning_scale=depth_image_influence,
                 image=[depth_image],
                 num_inference_steps=steps,
-                cross_attention_kwargs={"scale": lora_scale},
-                guidance_scale=guidance,
+                cross_attention_kwargs={"scale": lora_overall_influence},
+                guidance_scale=prompt_guidance,
                 original_size=(1024, 512),
                 target_size=(1024, 512),
                 generator=generator

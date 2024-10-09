@@ -30,11 +30,11 @@ class SDXLServer:
                 return self.status
             
             @server.register_function(name='generate_panorama')
-            def generate_panorama(prompt:str, negative_prompt:str, seed:int, steps:int, guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, lora_scale:float = 0) -> None:
+            def generate_panorama(prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, depth_image_influence:float, lora_overall_influence:float = 0) -> None:
                 print("Server : generate_panorama() called")
                 if self.sdxl is None: return
                 depth_image = image_from_png_bytes(depth_image_png_bytes.data)
-                result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, guidance=guidance, lora_scale=lora_scale, depth_image=depth_image)
+                result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, prompt_guidance=prompt_guidance, depth_image=depth_image, depth_image_influence=depth_image_influence, lora_overall_influence=lora_overall_influence)
                 return xmlrpc.client.Binary(image_to_png_bytes(result_image))
             
             print("Server : serving...")
