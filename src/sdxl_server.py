@@ -5,13 +5,36 @@ from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
 import xmlrpc.client
 
+import threading
+import queue
+import time
+
 class SDXLServer:
 
     server:SimpleXMLRPCServer = None
     sdxl:SDXL = None
     status:str = 'needs-init'
+    current_id:int = 0
 
     def start(self):
+
+        completed_jobs = []
+        q_in = queue.Queue()
+        def worker():
+            while True:
+                if q_in.empty():
+                    time.sleep(1)
+                else:
+                    settings = q_in.get()
+                    id = settings["id"]
+                    print(f"Processing request {id}")
+                    image = self.sdxl.generate_panorama(prompt=settings["prompt"], negative_prompt=settings["negative_prompt"], seed=settings["seed"], steps=settings["steps"], prompt_guidance=settings["prompt_guidance"], depth_image=settings["depth_image"], depth_image_influence=settings["depth_image_influence"], lora_overall_influence=settings["lora_overall_influence"])
+                    q_in.task_done()
+                    completed_jobs.append({"id":id, "image":image})
+                    
+        # Turn-on the worker thread.
+        threading.Thread(target=worker, daemon=True).start()
+
         with SimpleXMLRPCServer(('localhost', 1337), requestHandler=SimpleXMLRPCRequestHandler) as server:
 
             server.register_introspection_functions()
@@ -37,6 +60,42 @@ class SDXLServer:
                 result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, prompt_guidance=prompt_guidance, depth_image=depth_image, depth_image_influence=depth_image_influence, lora_overall_influence=lora_overall_influence)
                 return xmlrpc.client.Binary(image_to_png_bytes(result_image))
             
+            @server.register_function(name='queue_panorama')
+            def queue_panorama(prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, depth_image_influence:float, lora_overall_influence:float = 0) -> int:
+                print("Server : queue_panorama() called")
+                if self.sdxl is None: return
+                depth_image = image_from_png_bytes(depth_image_png_bytes.data)
+                
+                settings = {
+                    "id":self.current_id,
+                    "prompt":prompt, 
+                    "negative_prompt":negative_prompt, 
+                    "seed":seed, 
+                    "steps":steps, 
+                    "prompt_guidance":prompt_guidance, 
+                    "depth_image":depth_image, 
+                    "depth_image_influence":depth_image_influence, 
+                    "lora_overall_influence":lora_overall_influence
+                }
+                self.current_id += 1
+                q_in.put(settings)
+
+                return settings["id"]
+            
+            @server.register_function(name='list_completed_jobs')
+            def list_completed_jobs() -> list[int]:
+                print("Server : list_completed_jobs() called")
+                return list([item["id"] for item in completed_jobs])
+            
+            @server.register_function(name='get_image')
+            def get_image(id:int) -> xmlrpc.client.Binary | None:
+                item_with_id = next((x for x in completed_jobs if x["id"] == id), None)
+                if item_with_id is not None:
+                    completed_jobs.remove(item_with_id)
+                    return xmlrpc.client.Binary(image_to_png_bytes(item_with_id["image"]))
+                else:
+                    return None
+
             print("Server : serving...")
             server.serve_forever()
 

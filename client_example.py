@@ -1,33 +1,11 @@
-import os, io
-import xmlrpc.client
+import os
+from random import randint
 from PIL import Image
+import time
+from sdxl_client import SDXLClient
 
 cwd = os.getcwd()
 models_base = os.path.join(cwd, "../../models/")
-
-class SDXLClient:
-
-    def image_from_png_bytes(data:bytes) -> Image:
-        b =  io.BytesIO(data)
-        return Image.open(b)
-
-    def image_to_png_bytes(img:Image) -> bytes:
-        b = io.BytesIO()
-        img.save(b, 'PNG')
-        return b.getvalue()
-    
-    def init(self, model_file:str, loras:list[tuple[str, str]] = [], lora_weights:list[float] = []) -> None:
-        self.server.init(model_file, loras, lora_weights)
-
-    def __init__(self):
-        self.server = xmlrpc.client.ServerProxy('http://localhost:1337')
-
-    def generate_panorama(self, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image:Image, depth_image_influence:float, lora_overall_influence:float = 0) -> Image:
-        depth_image_png_bytes = xmlrpc.client.Binary(SDXLClient.image_to_png_bytes(depth_image))
-        result = self.server.generate_panorama(prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_png_bytes, depth_image_influence, lora_overall_influence)
-        image = SDXLClient.image_from_png_bytes(result.data)
-        return image
-
 
 def model_path(path_under_models_folder:str) -> str:
     return os.path.join(models_base, path_under_models_folder)
@@ -49,23 +27,37 @@ sdxl_lora_scifistyle = (model_path("civitai/sdxl_10_lora/scifi_buildings_sdxl_lo
 
 if __name__ == "__main__":
 
-    negative_prompt = "low quality, bad quality, sketches, blurry, jpeg artifacts"
-
-    prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
-        The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
-        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
-
     # Connect to the server and load a model + LoRAs
     client = SDXLClient()
     client.init(sdxl_model_mohawk, [sdxl_lora_offset_noise, sdxl_lora_scifistyle], [0.2, 0.7])
 
     # Start generating
-    seed = 123
+    seed = randint(1, 2147483647)
     steps = 15
     prompt_guidance=7.5
-    depth_image_influence = 0.8
+    depth_image_influence = 0.85
     lora_overall_influence = 1.0
     depth_image = Image.open(os.path.join(cwd, "../diffusion-server-files/input-depth.png"))
-    
+
+    prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
+        The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
+        Meticulously rendered, showcasing intricate textures and breathtaking scale. Cinematic masterpiece on ArtStation evokes a sense of awe and grandeur"
+
+    negative_prompt = "low quality, bad quality, sketches, blurry, jpeg artifacts"
+
+    # Syncronous example
     image = client.generate_panorama(prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, lora_overall_influence)
-    image.save(os.path.join(cwd, "../diffusion-server-files/sdxl_controlnet_test.png"))
+    image.show()
+
+    # Async example
+    def callback(id:int, image:Image):
+        print(f"Id {id} has finished")
+        image.show()
+
+    id1 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.0 * lora_overall_influence)
+    id2 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.5 * lora_overall_influence)
+    id3 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 1.0 * lora_overall_influence)
+    
+    while True:
+        time.sleep(5)
+        print("...")
