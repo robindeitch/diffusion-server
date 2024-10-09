@@ -133,19 +133,18 @@ class SDXL:
         self.refiner_pipe = refiner_pipe
 
 
-    def generate_using_depth(self, prompt:str, negative_prompt:str, depth_image_file:str, lora_scale:float = 0) -> Image:
+    def generate_using_depth(self, prompt:str, negative_prompt:str, depth_image:Image, lora_scale:float = 0) -> Image:
 
         controlnet_conditioning_scale = 0.85
 
         prompt = ", ".join([self.lora_prompt, prompt])
 
-        prev_time = log_timing(0, f"Loading depth image from {depth_image_file}")
-        image = load_image(depth_image_file)
-        image = image.resize((1024, 512))
+        prev_time = log_timing(0, f"Resizing depth image from ({depth_image.width}, {depth_image.height}) to (1024, 512)")
+        depth_image = depth_image.resize((1024, 512))
 
         # generate image
         inference_steps = 50
-
+        image:Image = None
         if self.refiner_pipe is not None:
             prev_time = log_timing(prev_time, f"Generating base image with prompt : {prompt}")
             refiner_start_percentage = 0.75
@@ -153,7 +152,7 @@ class SDXL:
                 prompt,
                 negative_prompt=negative_prompt,
                 controlnet_conditioning_scale=controlnet_conditioning_scale,
-                image=[image],
+                image=[depth_image],
                 num_inference_steps=inference_steps,
                 denoising_end=refiner_start_percentage,
                 generator=torch.manual_seed(0),
@@ -174,7 +173,7 @@ class SDXL:
                 prompt,
                 negative_prompt=negative_prompt,
                 controlnet_conditioning_scale=controlnet_conditioning_scale,
-                image=[image],
+                image=[depth_image],
                 num_inference_steps=inference_steps,
                 cross_attention_kwargs={"scale": lora_scale},
                 generator=torch.manual_seed(0)

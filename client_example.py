@@ -9,6 +9,11 @@ def image_from_png_bytes(data:bytes) -> Image:
     b =  io.BytesIO(data)
     return Image.open(b)
 
+def image_to_png_bytes(img:Image) -> bytes:
+    b = io.BytesIO()
+    img.save(b, 'PNG')
+    return b.getvalue()
+
 
 if __name__ == "__main__":
 
@@ -39,7 +44,7 @@ if __name__ == "__main__":
     sdxl_lora_ghibli = ( model_path("civitai/sdxl_10_lora/Studio Ghibli Style.safetensors"), "Studio Ghibli Style" )
     sdxl_lora_chalkboard = ( model_path("civitai/sdxl_10_lora/SDXL_ChalkBoardDrawing_LoRA_r8.safetensors"), "ChalkBoardDrawing" )
 
-    depth_image = os.path.join(cwd, "../diffusion-server-files/input-depth.png")
+    depth_image_file = os.path.join(cwd, "../diffusion-server-files/input-depth.png")
     output_image = os.path.join(cwd, "../diffusion-server-files/sdxl_controlnet_test.png")
 
     server = xmlrpc.client.ServerProxy('http://localhost:1337')
@@ -48,7 +53,9 @@ if __name__ == "__main__":
     server.init(sdxl_model_mohawk, [sdxl_lora_anime, sdxl_lora_moebius], [0.6, 0.9])
     print(server.get_status())
     
-    result = server.enqueue_with_depth(prompt3, negative_prompt, depth_image, 1.0)
+    depth_image_png_bytes = xmlrpc.client.Binary(image_to_png_bytes(Image.open(depth_image_file)))
+    result = server.enqueue_with_depth(prompt3, negative_prompt, depth_image_png_bytes, 1.0)
     image = image_from_png_bytes(result.data)
+
     image.save(output_image, "PNG")
     image.show()

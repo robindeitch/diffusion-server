@@ -1,5 +1,5 @@
 from sdxl_engine import SDXL
-from utils import LoraInfo, image_to_png_bytes
+from utils import LoraInfo, image_from_png_bytes, image_to_png_bytes
 
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
@@ -30,10 +30,11 @@ class SDXLServer:
                 return self.status
             
             @server.register_function(name='enqueue_with_depth')
-            def enqueue_with_depth(prompt:str, negative_prompt:str, depth_image_file:str, lora_scale:float = 0) -> None:
+            def enqueue_with_depth(prompt:str, negative_prompt:str, depth_image_png_bytes:xmlrpc.client.Binary, lora_scale:float = 0) -> None:
                 print("Server : enqueue_with_depth() called")
                 if self.sdxl is None: return
-                result_image = self.sdxl.generate_using_depth(prompt=prompt, negative_prompt=negative_prompt, lora_scale=lora_scale, depth_image_file=depth_image_file)
+                depth_image = image_from_png_bytes(depth_image_png_bytes.data)
+                result_image = self.sdxl.generate_using_depth(prompt=prompt, negative_prompt=negative_prompt, lora_scale=lora_scale, depth_image=depth_image)
                 return xmlrpc.client.Binary(image_to_png_bytes(result_image))
             
             print("Server : serving...")
