@@ -21,7 +21,7 @@ cd /D "%~dp0"
 @echo --------
 @echo
 python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-python -m pip install einops fire diffusers accelerate huggingface-hub safetensors sentencepiece transformers tokenizers protobuf requests invisible-watermark
+python -m pip install einops fire diffusers accelerate peft huggingface-hub safetensors sentencepiece transformers tokenizers protobuf requests invisible-watermark
 
 @echo --------
 @echo Done!
