@@ -12,5 +12,5 @@ cd /D "%~dp0"
 @echo --------
 @echo
 @cd src
-python sd.py
+python server.py
 cd ..
