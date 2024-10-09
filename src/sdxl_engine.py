@@ -2,6 +2,7 @@ from utils import model_path, LoraInfo, log_timing
 from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL
 from diffusers import AutoencoderKL
 from diffusers.utils import load_image
+from PIL import Image
 import torch
 
 dtype = torch.bfloat16
@@ -132,7 +133,7 @@ class SDXL:
         self.refiner_pipe = refiner_pipe
 
 
-    def generate_using_depth(self, prompt:str, negative_prompt:str, depth_image_file:str, output_image_file:str, lora_scale:float = 0) -> None:
+    def generate_using_depth(self, prompt:str, negative_prompt:str, depth_image_file:str, lora_scale:float = 0) -> Image:
 
         controlnet_conditioning_scale = 0.85
 
@@ -179,6 +180,5 @@ class SDXL:
                 generator=torch.manual_seed(0)
             ).images[0]
 
-        prev_time = log_timing(prev_time, f"Saving image to {output_image_file}")
-        image.save(output_image_file)
         prev_time = log_timing(prev_time, "Finished")
+        return image

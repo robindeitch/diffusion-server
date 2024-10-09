@@ -1,10 +1,17 @@
-import os
+import os, sys, io
 import xmlrpc.client
+from PIL import Image
 
 cwd = os.getcwd()
 models_base = os.path.join(cwd, "../../models/")
 
+def image_from_png_bytes(data:bytes) -> Image:
+    b =  io.BytesIO(data)
+    return Image.open(b)
+
+
 if __name__ == "__main__":
+
     negative_prompt = "low quality, bad quality, sketches"
 
     prompt0 = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
@@ -41,4 +48,7 @@ if __name__ == "__main__":
     server.init(sdxl_model_mohawk, [sdxl_lora_anime, sdxl_lora_moebius], [0.6, 0.9])
     print(server.get_status())
     
-    server.enqueue_with_depth(prompt3, negative_prompt, depth_image, output_image, 1.0)
+    result = server.enqueue_with_depth(prompt3, negative_prompt, depth_image, 1.0)
+    image = image_from_png_bytes(result.data)
+    image.save(output_image, "PNG")
+    image.show()

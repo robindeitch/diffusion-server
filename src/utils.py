@@ -1,5 +1,6 @@
-import os
+import os, io
 from timeit import default_timer as timer
+from PIL import Image
 
 def log_timing(prev_time:float, message:str) -> float:
 
@@ -14,6 +15,10 @@ def model_path(path_under_models_folder:str) -> str:
     models_base = "../../../models/"
     return os.path.join(models_base, path_under_models_folder)
 
+def image_to_png_bytes(img:Image) -> bytes:
+    b = io.BytesIO()
+    img.save(b, 'PNG')
+    return b.getvalue()
 
 class LoraInfo:
     def __init__(self, model:str, key:str) -> None:
