@@ -17,7 +17,7 @@ def image_to_png_bytes(img:Image) -> bytes:
 
 if __name__ == "__main__":
 
-    negative_prompt = "low quality, bad quality, sketches"
+    negative_prompt = "low quality, bad quality, sketches, blurry, jpeg artifacts"
 
     prompt0 = "aerial view, a futuristic research complex in a bright foggy jungle, hard lighting"
     prompt1 = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
@@ -36,6 +36,7 @@ if __name__ == "__main__":
     sdxl_model_mohawk = model_path("civitai/sdxl_10/MOHAWK_v20.safetensors")
     sdxl_model_cardos = model_path("civitai/sdxl_10/cardosXL_v10.safetensors")
 
+    sdxl_lora_offset_noise = (model_path("hugging-face/stabilityai/stable-diffusion-xl-base-1.0/sd_xl_offset_example-lora_1.0.safetensors"), "")
     sdxl_lora_scifistyle = (model_path("civitai/sdxl_10_lora/scifi_buildings_sdxl_lora-scifistyle-cinematic scifi.safetensors"), "#scifistyle, cinematic scifi")
     sdxl_lora_moebius = ( model_path("civitai/sdxl_10_lora/Moebius comic book_SDXL.safetensors"), "FRESHIDESH Moebius comic book" )
     sdxl_lora_eboy = ( model_path("civitai/sdxl_10_lora/Eboy_Pixelart_Style_XL.safetensors"), "eboy style" )
@@ -50,12 +51,11 @@ if __name__ == "__main__":
     server = xmlrpc.client.ServerProxy('http://localhost:1337')
     print(server.get_status())
 
-    server.init(sdxl_model_mohawk, [sdxl_lora_anime, sdxl_lora_moebius], [0.6, 0.9])
-    print(server.get_status())
+    server.init(sdxl_model_mohawk, [sdxl_lora_offset_noise, sdxl_lora_moebius], [0.25, 0.8])
     
     depth_image_png_bytes = xmlrpc.client.Binary(image_to_png_bytes(Image.open(depth_image_file)))
     result = server.enqueue_with_depth(prompt3, negative_prompt, depth_image_png_bytes, 1.0)
     image = image_from_png_bytes(result.data)
-
     image.save(output_image, "PNG")
+
     image.show()
