@@ -65,6 +65,7 @@ class SDXL:
         prev_time = log_timing(0, "Loading ControlNetModel")
         controlnet = ControlNetModel.from_pretrained(
             controlnet_model_folder,
+            variant="fp16",
             torch_dtype=dtype,
             local_files_only=True
         )
@@ -72,14 +73,16 @@ class SDXL:
         prev_time = log_timing(prev_time, f"Loading AutoencoderKL from {vae_model_folder}")
         vae = AutoencoderKL.from_pretrained(
             vae_model_folder,
+            variant="fp16",
             torch_dtype=dtype,
             local_files_only=True
         )
 
-        # Create SDXL base pipeline
+        # Create SDXL pipeline
         prev_time = log_timing(prev_time, f"Loading StableDiffusionXLControlNetPipeline from {model_file}")
         base_pipe = StableDiffusionXLControlNetPipeline.from_single_file(
             model_file,
+            variant="fp16",
             config="../config/sdxl10",
             controlnet=controlnet,
             vae=vae,
