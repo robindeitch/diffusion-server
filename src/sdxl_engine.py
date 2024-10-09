@@ -1,7 +1,5 @@
 from utils import model_path, LoraInfo, log_timing
-from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL
-from diffusers import AutoencoderKL
-from diffusers.utils import load_image
+from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler
 from PIL import Image
 import torch
 
@@ -59,7 +57,7 @@ class SDXL:
 
     def __init__(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
 
-        vae_model_folder = model_path("hugging-face/madebyollin/sdxl-vae-fp16-fix")
+        vae_model_folder = model_path("hugging-face/stabilityai/sdxl-vae")
         controlnet_model_folder = model_path("hugging-face/diffusers/controlnet-depth-sdxl-1.0")
         refiner_model_file = model_path("hugging-face/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors")
 
@@ -87,8 +85,10 @@ class SDXL:
             vae=vae,
             torch_dtype=dtype,
             local_dir_use_symlinks=False,
-            local_files_only=True
+            local_files_only=True,
+            add_watermarker=False
         )
+        base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config)
         if len(loras) > 0:
             names = [f'lora{index}' for index, _ in enumerate(loras)]
 
@@ -113,7 +113,8 @@ class SDXL:
                 config="../config/sdxl10-refiner",
                 vae=base_pipe.vae,
                 text_encoder_2=base_pipe.text_encoder_2,
-                torch_dtype=dtype
+                torch_dtype=dtype,
+                add_watermarker=False
             )
             refiner_pipe.enable_model_cpu_offload()
 
@@ -143,7 +144,8 @@ class SDXL:
         depth_image = depth_image.resize((1024, 512))
 
         # generate image
-        inference_steps = 50
+        inference_steps = 20
+        generator = torch.manual_seed(1337)
         image:Image = None
         if self.refiner_pipe is not None:
             prev_time = log_timing(prev_time, f"Generating base image with prompt : {prompt}")
@@ -155,7 +157,8 @@ class SDXL:
                 image=[depth_image],
                 num_inference_steps=inference_steps,
                 denoising_end=refiner_start_percentage,
-                generator=torch.manual_seed(0),
+                guidance_scale=7.5,
+                generator=generator,
                 output_type="latent"
             ).images
 
@@ -165,7 +168,7 @@ class SDXL:
                 image=image,
                 num_inference_steps=inference_steps,
                 denoising_start=refiner_start_percentage,
-                generator=torch.manual_seed(0)
+                generator=generator
             ).images[0]
         else:
             prev_time = log_timing(prev_time, f"Generating image with LoRA and prompt {prompt}")
@@ -176,7 +179,10 @@ class SDXL:
                 image=[depth_image],
                 num_inference_steps=inference_steps,
                 cross_attention_kwargs={"scale": lora_scale},
-                generator=torch.manual_seed(0)
+                guidance_scale=7.5,
+                original_size=(1024, 512),
+                target_size=(1024, 512),
+                generator=generator
             ).images[0]
 
         prev_time = log_timing(prev_time, "Finished")
