@@ -1,3 +1,4 @@
 .vscode
+**.safetensors
 .venv
 **/__pycache__
