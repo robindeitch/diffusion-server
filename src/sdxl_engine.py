@@ -89,8 +89,8 @@ class SDXL:
             add_watermarker=False
         )
         # https://huggingface.co/docs/diffusers/v0.26.2/en/api/schedulers/overview#schedulers
-        #base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config)
-        base_pipe.scheduler = DPMSolverMultistepScheduler.from_config(base_pipe.scheduler.config, algorithm_type="sde-dpmsolver++", use_karras_sigmas=True)
+        base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config, timestep_spacing="trailing")
+        #base_pipe.scheduler = DPMSolverMultistepScheduler.from_config(base_pipe.scheduler.config, algorithm_type="sde-dpmsolver++", use_karras_sigmas=True)
         if len(loras) > 0:
             names = [f'lora{index}' for index, _ in enumerate(loras)]
 
@@ -106,19 +106,18 @@ class SDXL:
         base_pipe.enable_model_cpu_offload()
 
         # Create SDXL refiner pipeline
-        if len(loras) > 0:
-            refiner_pipe = None
-        else:
-            prev_time = log_timing(prev_time, f"Loading StableDiffusionXLImg2ImgPipeline from {refiner_model_file}")
-            refiner_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(
-                refiner_model_file,
-                config="../config/sdxl10-refiner",
-                vae=base_pipe.vae,
-                text_encoder_2=base_pipe.text_encoder_2,
-                torch_dtype=dtype,
-                add_watermarker=False
-            )
-            refiner_pipe.enable_model_cpu_offload()
+        refiner_pipe = None
+        # if len(loras) == 0:
+        #     prev_time = log_timing(prev_time, f"Loading StableDiffusionXLImg2ImgPipeline from {refiner_model_file}")
+        #     refiner_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(
+        #         refiner_model_file,
+        #         config="../config/sdxl10-refiner",
+        #         vae=base_pipe.vae,
+        #         text_encoder_2=base_pipe.text_encoder_2,
+        #         torch_dtype=dtype,
+        #         add_watermarker=False
+        #     )
+        #     refiner_pipe.enable_model_cpu_offload()
 
         # Compiler models - doesn't seem to work, might need to pip install torchtriton --extra-index-url "https://download.pytorch.org/whl/nightly/cu121"
         #prev_time = log_timing(prev_time, "Compiling StableDiffusionXLControlNetPipeline")
@@ -136,7 +135,7 @@ class SDXL:
         self.refiner_pipe = refiner_pipe
 
 
-    def generate_using_depth(self, prompt:str, negative_prompt:str, depth_image:Image, lora_scale:float = 0) -> Image:
+    def generate_panorama(self, prompt:str, negative_prompt:str, seed:int, steps:int, guidance:float, depth_image:Image, lora_scale:float = 0) -> Image:
 
         controlnet_conditioning_scale = 0.85
 
@@ -146,8 +145,7 @@ class SDXL:
         depth_image = depth_image.resize((1024, 512))
 
         # generate image
-        inference_steps = 20
-        generator = torch.manual_seed(1337)
+        generator = torch.manual_seed(seed)
         image:Image = None
         if self.refiner_pipe is not None:
             prev_time = log_timing(prev_time, f"Generating base image with prompt : {prompt}")
@@ -157,9 +155,9 @@ class SDXL:
                 negative_prompt=negative_prompt,
                 controlnet_conditioning_scale=controlnet_conditioning_scale,
                 image=[depth_image],
-                num_inference_steps=inference_steps,
+                num_inference_steps=steps,
                 denoising_end=refiner_start_percentage,
-                guidance_scale=7.5,
+                guidance_scale=guidance,
                 generator=generator,
                 output_type="latent"
             ).images
@@ -168,7 +166,7 @@ class SDXL:
             image = self.refiner_pipe(
                 prompt=prompt,
                 image=image,
-                num_inference_steps=inference_steps,
+                num_inference_steps=steps,
                 denoising_start=refiner_start_percentage,
                 generator=generator
             ).images[0]
@@ -179,9 +177,9 @@ class SDXL:
                 negative_prompt=negative_prompt,
                 controlnet_conditioning_scale=controlnet_conditioning_scale,
                 image=[depth_image],
-                num_inference_steps=inference_steps,
+                num_inference_steps=steps,
                 cross_attention_kwargs={"scale": lora_scale},
-                guidance_scale=7.5,
+                guidance_scale=guidance,
                 original_size=(1024, 512),
                 target_size=(1024, 512),
                 generator=generator

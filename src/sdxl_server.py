@@ -29,12 +29,12 @@ class SDXLServer:
                 self.status = 'ready'
                 return self.status
             
-            @server.register_function(name='enqueue_with_depth')
-            def enqueue_with_depth(prompt:str, negative_prompt:str, depth_image_png_bytes:xmlrpc.client.Binary, lora_scale:float = 0) -> None:
-                print("Server : enqueue_with_depth() called")
+            @server.register_function(name='generate_panorama')
+            def generate_panorama(prompt:str, negative_prompt:str, seed:int, steps:int, guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, lora_scale:float = 0) -> None:
+                print("Server : generate_panorama() called")
                 if self.sdxl is None: return
                 depth_image = image_from_png_bytes(depth_image_png_bytes.data)
-                result_image = self.sdxl.generate_using_depth(prompt=prompt, negative_prompt=negative_prompt, lora_scale=lora_scale, depth_image=depth_image)
+                result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, guidance=guidance, lora_scale=lora_scale, depth_image=depth_image)
                 return xmlrpc.client.Binary(image_to_png_bytes(result_image))
             
             print("Server : serving...")
