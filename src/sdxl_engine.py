@@ -1,5 +1,5 @@
 from utils import model_path, LoraInfo, log_timing
-from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler
+from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler, DPMSolverMultistepScheduler
 from PIL import Image
 import torch
 
@@ -88,7 +88,9 @@ class SDXL:
             local_files_only=True,
             add_watermarker=False
         )
-        base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config)
+        # https://huggingface.co/docs/diffusers/v0.26.2/en/api/schedulers/overview#schedulers
+        #base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config)
+        base_pipe.scheduler = DPMSolverMultistepScheduler.from_config(base_pipe.scheduler.config, algorithm_type="sde-dpmsolver++", use_karras_sigmas=True)
         if len(loras) > 0:
             names = [f'lora{index}' for index, _ in enumerate(loras)]
 
