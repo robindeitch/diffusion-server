@@ -3,7 +3,7 @@ from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, St
 from PIL import Image
 import torch
 
-dtype = torch.bfloat16
+dtype = torch.float16
 
 # ---------------------
 # Seamless tiling from here : https://github.com/huggingface/diffusers/issues/556
@@ -58,7 +58,8 @@ class SDXL:
     def __init__(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
 
         controlnet_model_folder = "../.models/diffusers/controlnet-depth-sdxl-1.0"
-        vae_model_folder = "../.models/stabilityai/sdxl-vae"
+        #vae_model_folder = "../.models/stabilityai/sdxl-vae"
+        vae_model_folder = "../.models/madebyollin/sdxl-vae-fp16-fix"
         refiner_model_file = "../.models/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors"
 
         # initialize the models and pipeline
@@ -69,6 +70,7 @@ class SDXL:
             torch_dtype=dtype,
             local_files_only=True
         )
+        controlnet.to("cuda")
 
         prev_time = log_timing(prev_time, f"Loading AutoencoderKL from {vae_model_folder}")
         vae = AutoencoderKL.from_pretrained(
@@ -76,6 +78,7 @@ class SDXL:
             torch_dtype=dtype,
             local_files_only=True
         )
+        vae.to("cuda")
 
         # Create SDXL pipeline
         prev_time = log_timing(prev_time, f"Loading StableDiffusionXLControlNetPipeline from {model_file}")
@@ -105,7 +108,7 @@ class SDXL:
 
             self.lora_prompt = ", ".join([lora.key for lora in loras])
 
-        base_pipe.enable_model_cpu_offload()
+        base_pipe.to("cuda")
 
         # Create SDXL refiner pipeline
         refiner_pipe = None
