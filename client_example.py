@@ -46,17 +46,23 @@ if __name__ == "__main__":
     negative_prompt = "low quality, bad quality, sketches, blurry, jpeg artifacts"
 
     # Syncronous example
-    image = client.generate_panorama(prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, lora_overall_influence)
+    output_file = os.path.join(cwd, "test_output.png")
+    image_file = client.generate_panorama(output_file, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, lora_overall_influence)
+    image = Image.open(image_file)
     image.show()
 
     # Async example
-    def callback(id:int, image:Image):
+    def callback(id:int, image_file:str):
         print(f"Id {id} has finished")
-        image.show()
+        img = Image.open(image_file)
+        img.show()
 
-    id1 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.0 * lora_overall_influence)
-    id2 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.5 * lora_overall_influence)
-    id3 = client.queue_panorama(callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 1.0 * lora_overall_influence)
+    output_file_1 = os.path.join(cwd, "test_output_1.png")
+    output_file_2 = os.path.join(cwd, "test_output_2.png")
+    output_file_3 = os.path.join(cwd, "test_output_3.png")
+    id1 = client.queue_panorama(output_file_1, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.0 * lora_overall_influence)
+    id2 = client.queue_panorama(output_file_2, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.5 * lora_overall_influence)
+    id3 = client.queue_panorama(output_file_3, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 1.0 * lora_overall_influence)
     
     while True:
         time.sleep(5)
