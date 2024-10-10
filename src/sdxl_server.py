@@ -3,7 +3,7 @@ from utils import LoraInfo, image_from_png_bytes, image_to_png_bytes
 
 from xmlrpc.server import SimpleXMLRPCServer
 from xmlrpc.server import SimpleXMLRPCRequestHandler
-import xmlrpc.client
+from PIL import Image
 
 import threading
 import queue
@@ -33,7 +33,8 @@ class SDXLServer:
                     id = settings["id"]
                     output_file = settings["output_file"]
                     print(f"Processing request {id}")
-                    image = self.sdxl.generate_panorama(prompt=settings["prompt"], negative_prompt=settings["negative_prompt"], seed=settings["seed"], steps=settings["steps"], prompt_guidance=settings["prompt_guidance"], depth_image=settings["depth_image"], depth_image_influence=settings["depth_image_influence"], lora_overall_influence=settings["lora_overall_influence"])
+                    depth_image = Image.open(settings["depth_image_file"])
+                    image = self.sdxl.generate_panorama(prompt=settings["prompt"], negative_prompt=settings["negative_prompt"], seed=settings["seed"], steps=settings["steps"], prompt_guidance=settings["prompt_guidance"], depth_image=depth_image, depth_image_influence=settings["depth_image_influence"], lora_overall_influence=settings["lora_overall_influence"])
                     image.save(output_file)
                     q_in.task_done()
                     completed_jobs.append({"id":id, "image_file":output_file})
@@ -60,19 +61,18 @@ class SDXLServer:
                 return self.status
             
             @server.register_function(name='generate_panorama')
-            def generate_panorama(output_file:str, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, depth_image_influence:float, lora_overall_influence:float = 0) -> str:
+            def generate_panorama(output_file:str, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_file:str, depth_image_influence:float, lora_overall_influence:float = 0) -> str:
                 print("Server : generate_panorama() called")
                 if self.sdxl is None: return
-                depth_image = image_from_png_bytes(depth_image_png_bytes.data)
+                depth_image = Image.open(depth_image_file)
                 result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, prompt_guidance=prompt_guidance, depth_image=depth_image, depth_image_influence=depth_image_influence, lora_overall_influence=lora_overall_influence)
                 result_image.save(output_file)
                 return output_file
             
             @server.register_function(name='queue_panorama')
-            def queue_panorama(output_file:str, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_png_bytes:xmlrpc.client.Binary, depth_image_influence:float, lora_overall_influence:float = 0) -> int:
+            def queue_panorama(output_file:str, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image_file:str, depth_image_influence:float, lora_overall_influence:float = 0) -> int:
                 print("Server : queue_panorama() called")
                 if self.sdxl is None: return
-                depth_image = image_from_png_bytes(depth_image_png_bytes.data)
                 
                 settings = {
                     "id":self.current_id,
@@ -82,7 +82,7 @@ class SDXLServer:
                     "seed":seed, 
                     "steps":steps, 
                     "prompt_guidance":prompt_guidance, 
-                    "depth_image":depth_image, 
+                    "depth_image_file":depth_image_file, 
                     "depth_image_influence":depth_image_influence, 
                     "lora_overall_influence":lora_overall_influence
                 }

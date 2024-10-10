@@ -37,7 +37,7 @@ if __name__ == "__main__":
     prompt_guidance=7.5
     depth_image_influence = 0.85
     lora_overall_influence = 1.0
-    depth_image = Image.open(os.path.join(cwd, "./client-example-depth.png"))
+    depth_image_file = os.path.join(cwd, "./client-example-depth.png")
 
     prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
         The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     # Syncronous example
     output_file = os.path.join(cwd, "test_output.png")
-    image_file = client.generate_panorama(output_file, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, lora_overall_influence)
+    image_file = client.generate_panorama(output_file, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, lora_overall_influence)
     image = Image.open(image_file)
     image.show()
 
@@ -60,9 +60,9 @@ if __name__ == "__main__":
     output_file_1 = os.path.join(cwd, "test_output_1.png")
     output_file_2 = os.path.join(cwd, "test_output_2.png")
     output_file_3 = os.path.join(cwd, "test_output_3.png")
-    id1 = client.queue_panorama(output_file_1, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.0 * lora_overall_influence)
-    id2 = client.queue_panorama(output_file_2, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 0.5 * lora_overall_influence)
-    id3 = client.queue_panorama(output_file_3, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image, depth_image_influence, 1.0 * lora_overall_influence)
+    id1 = client.queue_panorama(output_file_1, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.0 * lora_overall_influence)
+    id2 = client.queue_panorama(output_file_2, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.5 * lora_overall_influence)
+    id3 = client.queue_panorama(output_file_3, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 1.0 * lora_overall_influence)
     
     while True:
         time.sleep(5)
