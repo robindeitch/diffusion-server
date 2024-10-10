@@ -16,8 +16,12 @@ class SDXLServer:
     status:str = 'needs-init'
     current_id:int = 0
 
+    def __init__(self):
+        self.sdxl = SDXL()
+
     def start(self):
 
+        # The worker thread will act on queued jobs sequentially
         completed_jobs = []
         q_in = queue.Queue()
         def worker():
@@ -32,9 +36,10 @@ class SDXLServer:
                     q_in.task_done()
                     completed_jobs.append({"id":id, "image":image})
                     
-        # Turn-on the worker thread.
+        # Start the worker thread.
         threading.Thread(target=worker, daemon=True).start()
 
+        # Create the xmlrpc server and register functions
         with SimpleXMLRPCServer(('localhost', 1337), requestHandler=SimpleXMLRPCRequestHandler) as server:
 
             server.register_introspection_functions()
@@ -48,7 +53,7 @@ class SDXLServer:
             def init(model_file:str, loras:list[tuple[str, str]] = [], lora_weights:list[float] = []) -> None:
                 print("Server : init() called")
                 loras = [LoraInfo(model, key) for model, key in loras]
-                self.sdxl = SDXL(model_file=model_file, loras=loras, lora_weights=lora_weights)
+                self.sdxl.init(model_file=model_file, loras=loras, lora_weights=lora_weights)
                 self.status = 'ready'
                 return self.status
             

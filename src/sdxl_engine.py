@@ -55,7 +55,12 @@ class SDXL:
     base_pipe: DiffusionPipeline = None
     refiner_pipe: DiffusionPipeline = None
 
-    def __init__(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
+    def init(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
+
+        # Free up any previous pipes
+        if self.base_pipe is not None:
+            self.base_pipe = None
+            torch.cuda.empty_cache()
 
         controlnet_model_folder = "../.models/diffusers/controlnet-depth-sdxl-1.0"
         #vae_model_folder = "../.models/stabilityai/sdxl-vae"
