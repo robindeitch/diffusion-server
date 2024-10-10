@@ -37,7 +37,7 @@ if __name__ == "__main__":
     prompt_guidance=7.5
     depth_image_influence = 0.85
     lora_overall_influence = 1.0
-    depth_image = Image.open(os.path.join(cwd, "../diffusion-server-files/input-depth.png"))
+    depth_image = Image.open(os.path.join(cwd, "./client-example-depth.png"))
 
     prompt = "Equirectangular projection. A photograph captures towering sci-fi buildings with cinematic grandeur. \
         The scene is bathed in black and white, with an orange accent color sparingly used to accentuate the architectural details. \
