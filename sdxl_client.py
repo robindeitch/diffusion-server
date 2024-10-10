@@ -7,9 +7,11 @@ class SDXLClient:
 
     in_progress_ids = []
 
+    thread_alive = False
+
     def worker(self):
         worker_server = xmlrpc.client.ServerProxy('http://localhost:1337')
-        while True:
+        while True and self.thread_alive:
             time.sleep(1)
             if len(self.in_progress_ids) > 0:
                 completed_jobs = worker_server.list_completed_jobs()
@@ -26,9 +28,14 @@ class SDXLClient:
 
                     callback(id, image_file)
 
-    def __init__(self):
+    def start(self):
+        self.in_progress_ids.clear()
         self.server = xmlrpc.client.ServerProxy('http://localhost:1337')
+        self.thread_alive = True
         threading.Thread(target=self.worker, daemon=True).start()
+
+    def stop(self):
+        self.thread_alive = False
 
     def init(self, model_file:str, loras:list[tuple[str, str]] = [], lora_weights:list[float] = []) -> None:
         self.server.init(model_file, loras, lora_weights)

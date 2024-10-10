@@ -27,8 +27,11 @@ sdxl_lora_scifistyle = (model_path("civitai/sdxl_10_lora/scifi_buildings_sdxl_lo
 
 if __name__ == "__main__":
 
-    # Connect to the server and load a model + LoRAs
+    # Connect to the server and start the worker thread
     client = SDXLClient()
+    client.start()
+
+    # Load a model + LoRAs
     client.init(sdxl_model_mohawk, [sdxl_lora_offset_noise, sdxl_lora_scifistyle], [0.2, 0.7])
 
     # Start generating
@@ -52,18 +55,25 @@ if __name__ == "__main__":
     image.show()
 
     # Async example
+
+    task_ids = []
+
     def callback(id:int, image_file:str):
         print(f"Id {id} has finished")
         img = Image.open(image_file)
         img.show()
+        task_ids.remove(id)
 
     output_file_1 = os.path.join(cwd, "test_output_1.png")
     output_file_2 = os.path.join(cwd, "test_output_2.png")
     output_file_3 = os.path.join(cwd, "test_output_3.png")
-    id1 = client.queue_panorama(output_file_1, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.0 * lora_overall_influence)
-    id2 = client.queue_panorama(output_file_2, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.5 * lora_overall_influence)
-    id3 = client.queue_panorama(output_file_3, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 1.0 * lora_overall_influence)
+    task_ids.append( client.queue_panorama(output_file_1, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.0 * lora_overall_influence) )
+    task_ids.append( client.queue_panorama(output_file_2, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 0.5 * lora_overall_influence) )
+    task_ids.append( client.queue_panorama(output_file_3, callback, prompt, negative_prompt, seed, steps, prompt_guidance, depth_image_file, depth_image_influence, 1.0 * lora_overall_influence) )
     
-    while True:
+    while True and len(task_ids) > 0:
         time.sleep(5)
         print("...")
+
+    # Stop the client's worker thread
+    client.stop()
