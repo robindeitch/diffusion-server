@@ -112,6 +112,8 @@ class SDXL:
             base_pipe.set_adapters(names, adapter_weights=lora_weights)
 
             self.lora_prompt = ", ".join([lora.key for lora in loras])
+        else:
+            self.lora_prompt = ""
 
         base_pipe.to("cuda")
 
