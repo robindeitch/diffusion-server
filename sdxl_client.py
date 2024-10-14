@@ -10,7 +10,7 @@ class SDXLClient:
     thread_alive = False
 
     def worker(self):
-        worker_server = xmlrpc.client.ServerProxy('http://localhost:1337')
+        worker_server = xmlrpc.client.ServerProxy('http://127.0.0.1:1337')
         while True and self.thread_alive:
             time.sleep(1)
             if len(self.in_progress_ids) > 0:
@@ -30,7 +30,7 @@ class SDXLClient:
 
     def start(self):
         self.in_progress_ids.clear()
-        self.server = xmlrpc.client.ServerProxy('http://localhost:1337')
+        self.server = xmlrpc.client.ServerProxy('http://127.0.0.1:1337')
         self.thread_alive = True
         threading.Thread(target=self.worker, daemon=True).start()
 

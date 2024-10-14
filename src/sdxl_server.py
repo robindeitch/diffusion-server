@@ -43,7 +43,7 @@ class SDXLServer:
         threading.Thread(target=worker, daemon=True).start()
 
         # Create the xmlrpc server and register functions
-        with SimpleXMLRPCServer(('localhost', 1337), requestHandler=SimpleXMLRPCRequestHandler) as server:
+        with SimpleXMLRPCServer(('127.0.0.1', 1337), requestHandler=SimpleXMLRPCRequestHandler) as server:
 
             server.register_introspection_functions()
 
