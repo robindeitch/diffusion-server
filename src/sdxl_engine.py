@@ -53,9 +53,8 @@ class SDXL:
 
     lora_prompt:str = ''
     base_pipe: DiffusionPipeline = None
-    refiner_pipe: DiffusionPipeline = None
 
-    def init(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> tuple[DiffusionPipeline, DiffusionPipeline]:
+    def init(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> None:
 
         # Free up any previous pipes
         if self.base_pipe is not None:
@@ -63,9 +62,7 @@ class SDXL:
             torch.cuda.empty_cache()
 
         controlnet_model_folder = "../.models/xinsir/controlnet-union-sdxl-1.0"
-        #vae_model_folder = "../.models/stabilityai/sdxl-vae"
         vae_model_folder = "../.models/madebyollin/sdxl-vae-fp16-fix"
-        refiner_model_file = "../.models/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors"
 
         # initialize the models and pipeline
         prev_time = log_timing(0, "Loading ControlNetModel")
@@ -116,20 +113,6 @@ class SDXL:
 
         base_pipe.to("cuda")
 
-        # Create SDXL refiner pipeline
-        refiner_pipe = None
-        # if len(loras) == 0:
-        #     prev_time = log_timing(prev_time, f"Loading StableDiffusionXLImg2ImgPipeline from {refiner_model_file}")
-        #     refiner_pipe = StableDiffusionXLImg2ImgPipeline.from_single_file(
-        #         refiner_model_file,
-        #         config="../config/sdxl10-refiner",
-        #         vae=base_pipe.vae,
-        #         text_encoder_2=base_pipe.text_encoder_2,
-        #         torch_dtype=dtype,
-        #         add_watermarker=False
-        #     )
-        #     refiner_pipe.enable_model_cpu_offload()
-
         # Compiler models - doesn't seem to work, might need to pip install torchtriton --extra-index-url "https://download.pytorch.org/whl/nightly/cu121"
         #prev_time = log_timing(prev_time, "Compiling StableDiffusionXLControlNetPipeline")
         #base_pipe.unet = torch.compile(base_pipe.unet)
@@ -143,7 +126,6 @@ class SDXL:
         prev_time = log_timing(prev_time, "Finished")
 
         self.base_pipe = base_pipe
-        self.refiner_pipe = refiner_pipe
 
 
     def generate_panorama(self, prompt:str, negative_prompt:str, seed:int, steps:int, prompt_guidance:float, depth_image:Image, depth_image_influence:float, lora_overall_influence:float = 0) -> Image:
@@ -156,7 +138,7 @@ class SDXL:
         # generate image
         generator = torch.manual_seed(seed)
         image:Image = None
-        if self.refiner_pipe is not None:
+        if False:
             prev_time = log_timing(prev_time, f"Generating base image with prompt : {prompt}")
             refiner_start_percentage = 0.75
             image = self.base_pipe(
