@@ -1,5 +1,6 @@
 .vscode
 **.safetensors
+**.pth
 .venv
 **/__pycache__
 **test_output*
