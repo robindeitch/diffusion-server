@@ -62,7 +62,7 @@ class SDXL:
             self.base_pipe = None
             torch.cuda.empty_cache()
 
-        controlnet_model_folder = "../.models/diffusers/controlnet-depth-sdxl-1.0"
+        controlnet_model_folder = "../.models/xinsir/controlnet-union-sdxl-1.0"
         #vae_model_folder = "../.models/stabilityai/sdxl-vae"
         vae_model_folder = "../.models/madebyollin/sdxl-vae-fp16-fix"
         refiner_model_file = "../.models/stabilityai/stable-diffusion-xl-refiner-1.0/sd_xl_refiner_1.0.safetensors"
@@ -71,7 +71,6 @@ class SDXL:
         prev_time = log_timing(0, "Loading ControlNetModel")
         controlnet = ControlNetModel.from_pretrained(
             controlnet_model_folder,
-            variant="fp16",
             torch_dtype=dtype,
             local_files_only=True
         )
