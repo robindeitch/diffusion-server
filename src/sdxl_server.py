@@ -34,8 +34,8 @@ class SDXLServer:
                     output_file = settings["output_file"]
                     print(f"Processing request {id}")
                     depth_image = Image.open(settings["depth_image_file"])
-                    image = self.sdxl.generate_panorama(prompt=settings["prompt"], negative_prompt=settings["negative_prompt"], seed=settings["seed"], steps=settings["steps"], prompt_guidance=settings["prompt_guidance"], depth_image=depth_image, depth_image_influence=settings["depth_image_influence"], lora_overall_influence=settings["lora_overall_influence"])
-                    image.save(output_file)
+                    image_original, image_upscaled = self.sdxl.generate_panorama(prompt=settings["prompt"], negative_prompt=settings["negative_prompt"], seed=settings["seed"], steps=settings["steps"], prompt_guidance=settings["prompt_guidance"], depth_image=depth_image, depth_image_influence=settings["depth_image_influence"], lora_overall_influence=settings["lora_overall_influence"])
+                    image_upscaled.save(output_file, compression_level=0, subsampling=0, quality=100)
                     q_in.task_done()
                     completed_jobs.append({"id":id, "image_file":output_file})
                     
@@ -65,8 +65,8 @@ class SDXLServer:
                 print("Server : generate_panorama() called")
                 if self.sdxl is None: return
                 depth_image = Image.open(depth_image_file)
-                result_image = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, prompt_guidance=prompt_guidance, depth_image=depth_image, depth_image_influence=depth_image_influence, lora_overall_influence=lora_overall_influence)
-                result_image.save(output_file)
+                image_original, image_upscaled = self.sdxl.generate_panorama(prompt=prompt, negative_prompt=negative_prompt, seed=seed, steps=steps, prompt_guidance=prompt_guidance, depth_image=depth_image, depth_image_influence=depth_image_influence, lora_overall_influence=lora_overall_influence)
+                image_upscaled.save(output_file, compression_level=0, subsampling=0, quality=100)
                 return output_file
             
             @server.register_function(name='queue_panorama')

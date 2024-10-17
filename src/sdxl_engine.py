@@ -1,7 +1,9 @@
-from utils import LoraInfo, log_timing
-from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler, DPMSolverMultistepScheduler
+import numpy as np
+from utils import LoraInfo, log_timing, tiled_scale, get_tiled_scale_steps
+from diffusers import DiffusionPipeline, StableDiffusionXLControlNetPipeline, StableDiffusionXLImg2ImgPipeline, ControlNetModel, AutoencoderKL, EulerDiscreteScheduler, DPMSolverSinglestepScheduler, DPMSolverMultistepScheduler, StableDiffusionUpscalePipeline, UNet2DConditionModel
 from PIL import Image
 import torch
+from spandrel import ModelLoader, ImageModelDescriptor
 
 dtype = torch.float16
 
@@ -53,6 +55,7 @@ class SDXL:
 
     lora_prompt:str = ''
     base_pipe: DiffusionPipeline = None
+    upscaler_md: ImageModelDescriptor = None
 
     def init(self, model_file:str, loras:list[LoraInfo], lora_weights:list[float]) -> None:
 
@@ -63,6 +66,7 @@ class SDXL:
 
         controlnet_model_folder = "../.models/xinsir/controlnet-union-sdxl-1.0"
         vae_model_folder = "../.models/madebyollin/sdxl-vae-fp16-fix"
+        upscaler_file = "../.models/skbhadra/ClearRealityV1/4x-ClearRealityV1.pth"
 
         # initialize the models and pipeline
         prev_time = log_timing(0, "Loading ControlNetModel")
@@ -72,6 +76,12 @@ class SDXL:
             local_files_only=True
         )
         controlnet.to("cuda")
+
+        prev_time = log_timing(prev_time, f"Loading upscaler from {upscaler_file}")
+        upscaler_sd = torch.load(upscaler_file, map_location="cuda", weights_only=True)
+        upscaler_md = ModelLoader().load_from_state_dict(upscaler_sd).eval()
+        upscaler_md.to("cuda")
+        self.upscaler_md = upscaler_md
 
         prev_time = log_timing(prev_time, f"Loading AutoencoderKL from {vae_model_folder}")
         vae = AutoencoderKL.from_pretrained(
@@ -95,8 +105,9 @@ class SDXL:
             add_watermarker=False
         )
         # https://huggingface.co/docs/diffusers/v0.26.2/en/api/schedulers/overview#schedulers
-        base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config, timestep_spacing="trailing")
+        #base_pipe.scheduler = EulerDiscreteScheduler.from_config(base_pipe.scheduler.config, timestep_spacing="trailing")
         #base_pipe.scheduler = DPMSolverMultistepScheduler.from_config(base_pipe.scheduler.config, algorithm_type="sde-dpmsolver++", use_karras_sigmas=True)
+        base_pipe.scheduler = DPMSolverSinglestepScheduler.from_config(base_pipe.scheduler.config, use_karras_sigmas=True)
         if len(loras) > 0:
             names = [f'lora{index}' for index, _ in enumerate(loras)]
 
@@ -135,46 +146,41 @@ class SDXL:
         prev_time = log_timing(0, f"Resizing depth image from ({depth_image.width}, {depth_image.height}) to (1024, 512)")
         depth_image = depth_image.resize((1024, 512))
 
-        # generate image
+        # Generate image
         generator = torch.manual_seed(seed)
         image:Image = None
-        if False:
-            prev_time = log_timing(prev_time, f"Generating base image with prompt : {prompt}")
-            refiner_start_percentage = 0.75
-            image = self.base_pipe(
-                prompt,
-                negative_prompt=negative_prompt,
-                controlnet_conditioning_scale=depth_image_influence,
-                image=[depth_image],
-                num_inference_steps=steps,
-                denoising_end=refiner_start_percentage,
-                guidance_scale=prompt_guidance,
-                generator=generator,
-                output_type="latent"
-            ).images
+        prev_time = log_timing(prev_time, f"Generating image with LoRA and prompt {prompt}")
+        image_original = self.base_pipe(
+            prompt,
+            negative_prompt=negative_prompt,
+            controlnet_conditioning_scale=depth_image_influence,
+            image=[depth_image],
+            num_inference_steps=steps,
+            cross_attention_kwargs={"scale": lora_overall_influence},
+            guidance_scale=prompt_guidance,
+            original_size=(1024, 512),
+            target_size=(1024, 512),
+            generator=generator,
+            output_type="np"
+        ).images[0]
 
-            prev_time = log_timing(prev_time, "Refining image")
-            image = self.refiner_pipe(
-                prompt=prompt,
-                image=image,
-                num_inference_steps=steps,
-                denoising_start=refiner_start_percentage,
-                generator=generator
-            ).images[0]
-        else:
-            prev_time = log_timing(prev_time, f"Generating image with LoRA and prompt {prompt}")
-            image = self.base_pipe(
-                prompt,
-                negative_prompt=negative_prompt,
-                controlnet_conditioning_scale=depth_image_influence,
-                image=[depth_image],
-                num_inference_steps=steps,
-                cross_attention_kwargs={"scale": lora_overall_influence},
-                guidance_scale=prompt_guidance,
-                original_size=(1024, 512),
-                target_size=(1024, 512),
-                generator=generator
-            ).images[0]
+        # Upscale 4x
+        # Code from ComfyUI : comfy_extras/nodes_upscale_model.py, nodes.py
+        prev_time = log_timing(prev_time, f"Upscaling x4")
+        image = torch.from_numpy(image_original)[None,]
+        in_img = image.movedim(-1,-3).to("cuda")
+        tile = 512
+        overlap = 32
+        shape = in_img.shape[0]
+        steps = shape * get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)
+
+        upscale_model = self.upscaler_md
+        result_tensor = tiled_scale(in_img, lambda a: upscale_model(a), tile_x=tile, tile_y=tile, overlap=overlap, upscale_amount=upscale_model.scale)
+        result_tensor = torch.clamp(result_tensor.movedim(-3,-1), min=0, max=1.0)
+        
+        result_numpy = result_tensor.cpu().numpy()[0] # convert to numpy and drop first dimension : [1, 2048, 4096, 3] -> [2048, 4096, 3]
+        result_numpy = np.clip(result_numpy * 255, 0, 255).astype(np.uint8) # convert back to 8-bit
+        image_upscaled = Image.fromarray(result_numpy) # Convert to PIL Image
 
         prev_time = log_timing(prev_time, "Finished")
-        return image
+        return image_original, image_upscaled
